@@ -55,12 +55,15 @@ class HabitsNotifier extends StateNotifier<HabitsState> {
 
     final result = await _calculateStreak.forAllHabits();
 
-    state = result.map(
-      (habits) => state.copyWith(habits: habits, isLoading: false),
-    ) as HabitsState? ?? state.copyWith(
-      isLoading: false,
-      error: result.errorOrNull ?? 'Failed to load habits',
-    );
+    if (result.isSuccess) {
+      final habits = (result as Success<List<HabitWithStreak>>).data;
+      state = state.copyWith(habits: habits, isLoading: false);
+    } else {
+      state = state.copyWith(
+        isLoading: false,
+        error: result.errorOrNull ?? 'Failed to load habits',
+      );
+    }
   }
 
   /// Load only habits active today
@@ -69,12 +72,15 @@ class HabitsNotifier extends StateNotifier<HabitsState> {
 
     final result = await _calculateStreak.forTodayHabits();
 
-    state = result.map(
-      (habits) => state.copyWith(habits: habits, isLoading: false),
-    ) as HabitsState? ?? state.copyWith(
-      isLoading: false,
-      error: result.errorOrNull ?? 'Failed to load today\'s habits',
-    );
+    if (result.isSuccess) {
+      final habits = (result as Success<List<HabitWithStreak>>).data;
+      state = state.copyWith(habits: habits, isLoading: false);
+    } else {
+      state = state.copyWith(
+        isLoading: false,
+        error: result.errorOrNull ?? 'Failed to load today\'s habits',
+      );
+    }
   }
 
   /// Create a new habit

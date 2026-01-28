@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
-import '../../../application/dto/habit_with_streak.dart';
-import '../../../presentation/theme/app_colors.dart';
+import '../../../../application/dto/habit_with_streak.dart';
+import '../../../theme/app_colors.dart';
 import 'streak_badge.dart';
 
 /// Habit list tile widget

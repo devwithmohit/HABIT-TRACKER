@@ -1,14 +1,31 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-
-// =============================================================================
-// DATA LAYER PROVIDERS
-// =============================================================================
-
 import '../../data/datasources/local/hive_database.dart';
 import '../../data/repositories/habit_repository_impl.dart';
 import '../../data/repositories/settings_repository_impl.dart';
 import '../../domain/repositories/habit_repository.dart';
 import '../../domain/repositories/settings_repository.dart';
+import '../../application/usecases/habits/create_habit.dart';
+import '../../application/usecases/habits/update_habit.dart';
+import '../../application/usecases/habits/delete_habit.dart';
+import '../../application/usecases/habits/get_all_habits.dart';
+import '../../application/usecases/habits/reorder_habits.dart';
+import '../../application/usecases/logs/mark_habit_complete.dart';
+import '../../application/usecases/logs/unmark_habit_complete.dart';
+import '../../application/usecases/logs/get_habit_logs.dart';
+import '../../application/usecases/analytics/calculate_streak.dart';
+import '../../application/usecases/analytics/get_weekly_summary.dart';
+import '../../application/usecases/analytics/check_habit_due_today.dart';
+import '../../presentation/providers/habits_provider.dart';
+import '../../presentation/providers/habit_logs_provider.dart';
+import '../../presentation/providers/settings_provider.dart';
+import '../notifications/notification_service.dart';
+import '../monetization/ad_service.dart';
+import '../monetization/purchase_service.dart';
+
+// =============================================================================
+// DATA LAYER PROVIDERS
+// =============================================================================
 
 /// Hive database provider (Singleton)
 final hiveDatabaseProvider = Provider<HiveDatabase>((ref) {
@@ -30,18 +47,6 @@ final settingsRepositoryProvider = Provider<SettingsRepository>((ref) {
 // =============================================================================
 // USE CASE PROVIDERS (APPLICATION LAYER)
 // =============================================================================
-
-import '../../application/usecases/habits/create_habit.dart';
-import '../../application/usecases/habits/update_habit.dart';
-import '../../application/usecases/habits/delete_habit.dart';
-import '../../application/usecases/habits/get_all_habits.dart';
-import '../../application/usecases/habits/reorder_habits.dart';
-import '../../application/usecases/logs/mark_habit_complete.dart';
-import '../../application/usecases/logs/unmark_habit_complete.dart';
-import '../../application/usecases/logs/get_habit_logs.dart';
-import '../../application/usecases/analytics/calculate_streak.dart';
-import '../../application/usecases/analytics/get_weekly_summary.dart';
-import '../../application/usecases/analytics/check_habit_due_today.dart';
 
 // Habit use cases
 final createHabitProvider = Provider<CreateHabit>((ref) {
@@ -94,10 +99,6 @@ final checkHabitDueTodayProvider = Provider<CheckHabitDueToday>((ref) {
 // PRESENTATION LAYER PROVIDERS (STATE MANAGEMENT)
 // =============================================================================
 
-import '../../presentation/providers/habits_provider.dart';
-import '../../presentation/providers/habit_logs_provider.dart';
-import '../../presentation/providers/settings_provider.dart';
-
 /// Habits state provider
 final habitsProvider = StateNotifierProvider<HabitsNotifier, HabitsState>((ref) {
   return HabitsNotifier(
@@ -128,10 +129,6 @@ final settingsProvider =
 // =============================================================================
 // CORE SERVICE PROVIDERS
 // =============================================================================
-
-import '../notifications/notification_service.dart';
-import '../monetization/ad_service.dart';
-import '../monetization/purchase_service.dart';
 
 /// Notification service provider (Singleton)
 final notificationServiceProvider = Provider<NotificationService>((ref) {
@@ -182,26 +179,51 @@ final weeklySummaryProvider = FutureProvider((ref) async {
 /// Initialize all core services
 /// Call this in main.dart before runApp()
 Future<void> initializeServices(ProviderContainer container) async {
-  // Initialize Hive database
-  final hiveDb = container.read(hiveDatabaseProvider);
-  await hiveDb.init();
-  await hiveDb.openBoxes();
+  try {
+    // Initialize Hive database
+    final hiveDb = container.read(hiveDatabaseProvider);
+    await hiveDb.init();
+    await hiveDb.openBoxes();
 
-  // Initialize notification service
-  final notificationService = container.read(notificationServiceProvider);
-  await notificationService.initialize();
+    // Initialize notification service (may not work on web)
+    try {
+      final notificationService = container.read(notificationServiceProvider);
+      await notificationService.initialize();
+    } catch (e) {
+      // Notifications not supported on web - continue
+      print('⚠️ Notification service not available: $e');
+    }
 
-  // Initialize ad service
-  final adService = container.read(adServiceProvider);
-  await adService.initialize();
+    // Initialize ad service (not supported on web)
+    if (!kIsWeb) {
+      try {
+        final adService = container.read(adServiceProvider);
+        await adService.initialize();
+      } catch (e) {
+        print('⚠️ Ad service initialization failed: $e');
+      }
+    }
 
-  // Initialize purchase service
-  final purchaseService = container.read(purchaseServiceProvider);
-  await purchaseService.initialize();
+    // Initialize purchase service (not supported on web)
+    if (!kIsWeb) {
+      try {
+        final purchaseService = container.read(purchaseServiceProvider);
+        await purchaseService.initialize();
+      } catch (e) {
+        print('⚠️ IAP service initialization failed: $e');
+      }
+    } else {
+      // Web platform - skip IAP
+      print('⚠️ Purchase service not available on web platform');
+    }
 
-  // Load initial settings
-  await container.read(settingsProvider.notifier).loadSettings();
+    // Load initial settings
+    await container.read(settingsProvider.notifier).loadSettings();
 
-  // Load habits
-  await container.read(habitsProvider.notifier).loadHabits();
+    // Load habits
+    await container.read(habitsProvider.notifier).loadHabits();
+  } catch (e) {
+    print('❌ Critical initialization error: $e');
+    rethrow;
+  }
 }

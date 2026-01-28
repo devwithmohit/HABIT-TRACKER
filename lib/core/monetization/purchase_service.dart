@@ -1,7 +1,5 @@
 import 'dart:io';
 import 'package:in_app_purchase/in_app_purchase.dart';
-import 'package:in_app_purchase_android/in_app_purchase_android.dart';
-import 'package:in_app_purchase_storekit/in_app_purchase_storekit.dart';
 import '../constants/app_constants.dart';
 import '../error/exceptions.dart';
 
@@ -31,14 +29,6 @@ class PurchaseService {
       if (!_isAvailable) {
         _isInitialized = false;
         return;
-      }
-
-      // Platform-specific initialization
-      if (Platform.isAndroid) {
-        // Enable pending purchases on Android
-        final androidDetails =
-            _iap.getPlatformAddition<InAppPurchaseAndroidPlatformAddition>();
-        await androidDetails.enablePendingPurchases();
       }
 
       // Listen to purchase updates
@@ -154,22 +144,11 @@ class PurchaseService {
     if (!_isAvailable) return false;
 
     try {
-      // Query past purchases
-      final QueryPurchaseDetailsResponse response =
-          await _iap.queryPastPurchases();
+      // Restore past purchases
+      await _iap.restorePurchases();
 
-      if (response.error != null) {
-        return false;
-      }
-
-      // Check if premium product was purchased
-      for (final purchase in response.pastPurchases) {
-        if (purchase.productID == premiumProductId &&
-            purchase.status == PurchaseStatus.purchased) {
-          return true;
-        }
-      }
-
+      // For now, return false as premium status should be tracked
+      // via purchase stream updates
       return false;
     } catch (e) {
       return false;
@@ -179,7 +158,7 @@ class PurchaseService {
   /// Get product price as string
   Future<String> getPremiumPrice() async {
     try {
-      final products = await getProducts();
+      final products = await _getProducts();
       final premiumProduct = products.firstWhere(
         (p) => p.id == premiumProductId,
         orElse: () => throw MonetizationException.productNotAvailable(),
@@ -189,6 +168,15 @@ class PurchaseService {
     } catch (e) {
       return '₹${AppConstants.premiumPriceMin}'; // Fallback price
     }
+  }
+
+  /// Get available products
+  Future<List<ProductDetails>> _getProducts() async {
+    final response = await _iap.queryProductDetails({premiumProductId});
+    if (response.error != null) {
+      throw MonetizationException.purchaseError(response.error!.message);
+    }
+    return response.productDetails;
   }
 
   /// Check if purchases are available

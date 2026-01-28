@@ -1,4 +1,5 @@
 import '../../../domain/repositories/habit_repository.dart';
+import '../../../domain/value_objects/streak.dart';
 import '../../dto/habit_with_streak.dart';
 import '../../dto/result.dart';
 
@@ -91,7 +92,8 @@ class CheckHabitDueToday {
     try {
       final allResult = await allDueToday();
       if (allResult is Failure) {
-        return Failure(allResult.message, allResult.exception);
+        final failure = allResult as Failure<List<HabitWithStreak>>;
+        return Failure(failure.message, failure.exception);
       }
 
       final dueHabits = (allResult as Success<List<HabitWithStreak>>).data;
@@ -131,6 +133,3 @@ class TodayStats {
   bool get noneComplete => completed == 0;
   bool get partialComplete => completed > 0 && remaining > 0;
 }
-
-// Import Streak for the allDueToday method
-import '../../../domain/value_objects/streak.dart';

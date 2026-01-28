@@ -88,6 +88,10 @@ class MonetizationException extends AppException {
   factory MonetizationException.notInitialized() {
     return MonetizationException('Monetization service not initialized');
   }
+
+  factory MonetizationException.productNotAvailable() {
+    return MonetizationException('Product not available');
+  }
 }
 
 /// Not found exceptions

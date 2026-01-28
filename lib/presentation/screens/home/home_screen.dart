@@ -1,18 +1,17 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import '../../../core/di/injection.dart';
+import '../../providers/habits_provider.dart';
 import 'widgets/habit_tile.dart';
 
 /// Home screen showing habit list
-/// Note: This is a basic structure. Full implementation requires:
-/// - Riverpod provider integration
-/// - Pull to refresh
-/// - Empty state
-/// - Loading state
-/// - Error handling
-class HomeScreen extends StatelessWidget {
+class HomeScreen extends ConsumerWidget {
   const HomeScreen({super.key});
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
+    final habitsState = ref.watch(habitsProvider);
+
     return Scaffold(
       appBar: AppBar(
         title: const Text('My Habits'),
@@ -26,32 +25,7 @@ class HomeScreen extends StatelessWidget {
           ),
         ],
       ),
-      body: Column(
-        children: [
-          // Today's progress card
-          _buildProgressCard(context),
-
-          // Habit list
-          Expanded(
-            child: ListView(
-              padding: const EdgeInsets.only(top: 8, bottom: 80),
-              children: [
-                // HabitTile widgets will go here
-                // Using provider: ref.watch(habitsProvider)
-                Center(
-                  child: Padding(
-                    padding: const EdgeInsets.all(32),
-                    child: Text(
-                      'Add your first habit!',
-                      style: Theme.of(context).textTheme.titleLarge,
-                    ),
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ],
-      ),
+      body: _buildBody(context, ref, habitsState),
       floatingActionButton: FloatingActionButton(
         onPressed: () {
           // Navigate to add habit screen
@@ -62,7 +36,102 @@ class HomeScreen extends StatelessWidget {
     );
   }
 
-  Widget _buildProgressCard(BuildContext context) {
+  Widget _buildBody(BuildContext context, WidgetRef ref, HabitsState habitsState) {
+    if (habitsState.isLoading) {
+      return const Center(child: CircularProgressIndicator());
+    }
+
+    if (habitsState.error != null) {
+      return Center(
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            const Icon(Icons.error_outline, size: 48, color: Colors.red),
+            const SizedBox(height: 16),
+            Text(habitsState.error!),
+            const SizedBox(height: 16),
+            ElevatedButton(
+              onPressed: () => ref.read(habitsProvider.notifier).loadHabits(),
+              child: const Text('Retry'),
+            ),
+          ],
+        ),
+      );
+    }
+
+    if (habitsState.habits.isEmpty) {
+      return _buildEmptyState(context);
+    }
+
+    return Column(
+      children: [
+        // Today's progress card
+        _buildProgressCard(context, habitsState.habits),
+
+        // Habit list
+        Expanded(
+          child: ListView.builder(
+            padding: const EdgeInsets.only(top: 8, bottom: 80),
+            itemCount: habitsState.habits.length,
+            itemBuilder: (context, index) {
+              final habitWithStreak = habitsState.habits[index];
+              return HabitTile(
+                habitWithStreak: habitWithStreak,
+                onTap: () {
+                  // Navigate to habit detail
+                },
+                onToggle: (isComplete) {
+                  if (isComplete) {
+                    ref.read(habitLogsProvider.notifier).markComplete(
+                          habitWithStreak.habit.id,
+                          DateTime.now(),
+                        );
+                  } else {
+                    ref.read(habitLogsProvider.notifier).unmarkToday(
+                          habitWithStreak.habit.id,
+                        );
+                  }
+                },
+              );
+            },
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildEmptyState(BuildContext context) {
+    return Center(
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          Icon(
+            Icons.task_alt,
+            size: 80,
+            color: Theme.of(context).colorScheme.primary.withOpacity(0.5),
+          ),
+          const SizedBox(height: 24),
+          Text(
+            'No habits yet',
+            style: Theme.of(context).textTheme.headlineSmall,
+          ),
+          const SizedBox(height: 8),
+          Text(
+            'Tap + to add your first habit',
+            style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                  color: Colors.grey,
+                ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildProgressCard(BuildContext context, List habitsWithStreak) {
+    final total = habitsWithStreak.length;
+    final completed = 0; // TODO: Calculate from today's logs
+    final rate = total > 0 ? (completed / total * 100).toInt() : 0;
+
     return Container(
       margin: const EdgeInsets.all(16),
       padding: const EdgeInsets.all(20),
@@ -78,11 +147,11 @@ class HomeScreen extends StatelessWidget {
       child: Row(
         mainAxisAlignment: MainAxisAlignment.spaceAround,
         children: [
-          _buildStat(context, '0', 'Completed'),
+          _buildStat(context, completed.toString(), 'Completed'),
           Container(width: 1, height: 40, color: Colors.white30),
-          _buildStat(context, '0', 'Total'),
+          _buildStat(context, total.toString(), 'Total'),
           Container(width: 1, height: 40, color: Colors.white30),
-          _buildStat(context, '0%', 'Rate'),
+          _buildStat(context, '$rate%', 'Rate'),
         ],
       ),
     );
