@@ -3,6 +3,8 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../core/di/injection.dart';
 import '../../providers/habits_provider.dart';
 import 'widgets/habit_tile.dart';
+import '../settings/settings_screen.dart';
+import '../add_habit/add_habit_screen.dart';
 
 /// Home screen showing habit list
 class HomeScreen extends ConsumerWidget {
@@ -19,8 +21,12 @@ class HomeScreen extends ConsumerWidget {
           IconButton(
             icon: const Icon(Icons.settings),
             onPressed: () {
-              // Navigate to settings
-              // Navigator.pushNamed(context, '/settings');
+              Navigator.push(
+                context,
+                MaterialPageRoute(
+                  builder: (context) => const SettingsScreen(),
+                ),
+              );
             },
           ),
         ],
@@ -28,8 +34,12 @@ class HomeScreen extends ConsumerWidget {
       body: _buildBody(context, ref, habitsState),
       floatingActionButton: FloatingActionButton(
         onPressed: () {
-          // Navigate to add habit screen
-          // Navigator.pushNamed(context, '/add-habit');
+          Navigator.push(
+            context,
+            MaterialPageRoute(
+              builder: (context) => const AddHabitScreen(),
+            ),
+          );
         },
         child: const Icon(Icons.add),
       ),
@@ -80,17 +90,34 @@ class HomeScreen extends ConsumerWidget {
                 onTap: () {
                   // Navigate to habit detail
                 },
-                onToggle: (isComplete) {
+                onToggle: (isComplete) async {
+                  // Show immediate feedback
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(
+                      content: Text(
+                        isComplete
+                          ? '✓ ${habitWithStreak.habit.name} completed!'
+                          : '○ ${habitWithStreak.habit.name} unmarked'
+                      ),
+                      duration: const Duration(seconds: 1),
+                      behavior: SnackBarBehavior.floating,
+                    ),
+                  );
+
+                  // Update the habit log
                   if (isComplete) {
-                    ref.read(habitLogsProvider.notifier).markComplete(
+                    await ref.read(habitLogsProvider.notifier).markComplete(
                           habitWithStreak.habit.id,
                           DateTime.now(),
                         );
                   } else {
-                    ref.read(habitLogsProvider.notifier).unmarkToday(
+                    await ref.read(habitLogsProvider.notifier).unmarkToday(
                           habitWithStreak.habit.id,
                         );
                   }
+
+                  // Refresh the habits list to show updated state
+                  ref.read(habitsProvider.notifier).loadHabits();
                 },
               );
             },
