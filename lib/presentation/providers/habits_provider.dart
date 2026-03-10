@@ -90,6 +90,7 @@ class HabitsNotifier extends StateNotifier<HabitsState> {
     required String icon,
     required String color,
     required List<int> activeDays,
+    bool isPremium = false,
   }) async {
     final result = await _createHabit(
       id: id,
@@ -97,6 +98,7 @@ class HabitsNotifier extends StateNotifier<HabitsState> {
       icon: icon,
       color: color,
       activeDays: activeDays,
+      isPremium: isPremium,
     );
 
     if (result.isSuccess) {
@@ -145,6 +147,15 @@ class HabitsNotifier extends StateNotifier<HabitsState> {
       state = state.copyWith(error: result.errorOrNull);
       return false;
     }
+  }
+
+  /// Reorder habits in the list
+  void reorderHabits(int oldIndex, int newIndex) {
+    if (oldIndex < newIndex) newIndex--;
+    final items = List<HabitWithStreak>.from(state.habits);
+    final item = items.removeAt(oldIndex);
+    items.insert(newIndex, item);
+    state = state.copyWith(habits: items);
   }
 
   /// Refresh habits (pull to refresh)

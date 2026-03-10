@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'presentation/screens/home/home_screen.dart';
+import 'presentation/screens/onboarding/onboarding_screen.dart';
 import 'presentation/theme/app_theme.dart';
 import 'core/di/injection.dart';
 
@@ -42,14 +43,21 @@ class MyApp extends ConsumerWidget {
     // Watch settings for theme
     final settingsState = ref.watch(settingsProvider);
     final themeMode = settingsState.settings.themeMode;
+    final isFirstLaunch = settingsState.settings.isFirstLaunch;
 
     return MaterialApp(
       title: 'Habit Tracker',
       debugShowCheckedModeBanner: false,
       theme: AppTheme.light(),
-      darkTheme: AppTheme.dark(),
+      darkTheme: themeMode == 'amoled' ? AppTheme.amoled() : AppTheme.dark(),
       themeMode: _getThemeMode(themeMode),
-      home: const HomeScreen(),
+      home: isFirstLaunch
+          ? OnboardingScreen(
+              onComplete: () {
+                ref.read(settingsProvider.notifier).completeFirstLaunch();
+              },
+            )
+          : const HomeScreen(),
     );
   }
 

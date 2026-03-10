@@ -1,6 +1,7 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../domain/entities/user_settings.dart';
 import '../../domain/repositories/settings_repository.dart';
+import '../../core/notifications/notification_service.dart';
 
 /// State for user settings
 class SettingsState {
@@ -30,8 +31,9 @@ class SettingsState {
 /// Settings state notifier
 class SettingsNotifier extends StateNotifier<SettingsState> {
   final SettingsRepository _repository;
+  final NotificationService? _notificationService;
 
-  SettingsNotifier(this._repository)
+  SettingsNotifier(this._repository, [this._notificationService])
       : super(SettingsState(settings: UserSettings.defaultSettings())) {
     loadSettings();
   }
@@ -70,6 +72,19 @@ class SettingsNotifier extends StateNotifier<SettingsState> {
       state = state.copyWith(
         settings: state.settings.copyWith(notificationsEnabled: enabled),
       );
+      // Propagate to OS scheduler
+      if (_notificationService != null) {
+        if (enabled) {
+          final time = state.settings.notificationTimeComponents;
+          await _notificationService.scheduleDailyNotification(
+            hour: time['hour']!,
+            minute: time['minute']!,
+            skipWeekends: state.settings.skipWeekends,
+          );
+        } else {
+          await _notificationService.cancelAllNotifications();
+        }
+      }
     } catch (e) {
       state = state.copyWith(error: 'Failed to update notifications: $e');
     }
@@ -82,6 +97,15 @@ class SettingsNotifier extends StateNotifier<SettingsState> {
       state = state.copyWith(
         settings: state.settings.copyWith(notificationTime: time),
       );
+      // Reschedule notification with new time
+      if (_notificationService != null && state.settings.notificationsEnabled) {
+        final parts = time.split(':');
+        await _notificationService.scheduleDailyNotification(
+          hour: int.parse(parts[0]),
+          minute: int.parse(parts[1]),
+          skipWeekends: state.settings.skipWeekends,
+        );
+      }
     } catch (e) {
       state = state.copyWith(error: 'Failed to update notification time: $e');
     }
@@ -94,6 +118,15 @@ class SettingsNotifier extends StateNotifier<SettingsState> {
       state = state.copyWith(
         settings: state.settings.copyWith(skipWeekends: skip),
       );
+      // Reschedule notification with updated skip-weekends flag
+      if (_notificationService != null && state.settings.notificationsEnabled) {
+        final time = state.settings.notificationTimeComponents;
+        await _notificationService.scheduleDailyNotification(
+          hour: time['hour']!,
+          minute: time['minute']!,
+          skipWeekends: skip,
+        );
+      }
     } catch (e) {
       state = state.copyWith(error: 'Failed to update skip weekends: $e');
     }

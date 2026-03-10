@@ -22,6 +22,7 @@ import '../../presentation/providers/settings_provider.dart';
 import '../notifications/notification_service.dart';
 import '../monetization/ad_service.dart';
 import '../monetization/purchase_service.dart';
+import '../services/export_service.dart';
 
 // =============================================================================
 // DATA LAYER PROVIDERS
@@ -123,7 +124,10 @@ final habitLogsProvider =
 /// Settings state provider
 final settingsProvider =
     StateNotifierProvider<SettingsNotifier, SettingsState>((ref) {
-  return SettingsNotifier(ref.watch(settingsRepositoryProvider));
+  return SettingsNotifier(
+    ref.watch(settingsRepositoryProvider),
+    ref.watch(notificationServiceProvider),
+  );
 });
 
 // =============================================================================
@@ -143,6 +147,11 @@ final adServiceProvider = Provider<AdService>((ref) {
 /// Purchase service provider (Singleton)
 final purchaseServiceProvider = Provider<PurchaseService>((ref) {
   return PurchaseService();
+});
+
+/// Export service provider
+final exportServiceProvider = Provider<ExportService>((ref) {
+  return ExportService(ref.watch(habitRepositoryProvider));
 });
 
 // =============================================================================
@@ -199,6 +208,7 @@ Future<void> initializeServices(ProviderContainer container) async {
       try {
         final adService = container.read(adServiceProvider);
         await adService.initialize();
+        await adService.loadBannerAd();
       } catch (e) {
         print('⚠️ Ad service initialization failed: $e');
       }
@@ -222,6 +232,9 @@ Future<void> initializeServices(ProviderContainer container) async {
 
     // Load habits
     await container.read(habitsProvider.notifier).loadHabits();
+
+    // Load today's logs for progress tracking
+    await container.read(habitLogsProvider.notifier).loadTodayLogs();
   } catch (e) {
     print('❌ Critical initialization error: $e');
     rethrow;

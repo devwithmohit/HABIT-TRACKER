@@ -9,6 +9,8 @@ class HabitTile extends StatelessWidget {
   final VoidCallback? onTap;
   final VoidCallback? onLongPress;
   final Function(bool)? onToggle;
+  final VoidCallback? onArchive;
+  final VoidCallback? onDelete;
 
   const HabitTile({
     super.key,
@@ -16,6 +18,8 @@ class HabitTile extends StatelessWidget {
     this.onTap,
     this.onLongPress,
     this.onToggle,
+    this.onArchive,
+    this.onDelete,
   });
 
   @override
@@ -24,12 +28,45 @@ class HabitTile extends StatelessWidget {
     final streak = habitWithStreak.streak;
     final isCompleted = streak.isActiveToday;
 
-    return Card(
-      margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-      child: InkWell(
-        onTap: onTap,
-        onLongPress: onLongPress,
-        borderRadius: BorderRadius.circular(16),
+    return Dismissible(
+      key: Key(habit.id),
+      direction: DismissDirection.endToStart,
+      confirmDismiss: (direction) async {
+        return await showDialog<bool>(
+          context: context,
+          builder: (context) => AlertDialog(
+            title: const Text('Archive Habit'),
+            content: Text('Archive "${habit.name}"? You can restore it later from settings.'),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(context, false),
+                child: const Text('Cancel'),
+              ),
+              TextButton(
+                onPressed: () => Navigator.pop(context, true),
+                child: const Text('Archive'),
+              ),
+            ],
+          ),
+        );
+      },
+      onDismissed: (_) => onArchive?.call(),
+      background: Container(
+        alignment: Alignment.centerRight,
+        padding: const EdgeInsets.only(right: 24),
+        margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+        decoration: BoxDecoration(
+          color: Colors.orange,
+          borderRadius: BorderRadius.circular(16),
+        ),
+        child: const Icon(Icons.archive, color: Colors.white, size: 28),
+      ),
+      child: Card(
+        margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+        child: InkWell(
+          onTap: onTap,
+          onLongPress: () => _showContextMenu(context),
+          borderRadius: BorderRadius.circular(16),
         child: Padding(
           padding: const EdgeInsets.all(16),
           child: Row(
@@ -116,6 +153,68 @@ class HabitTile extends StatelessWidget {
             ],
           ),
         ),
+      ),
+    ), // end Card
+    ); // end Dismissible
+  }
+
+  void _showContextMenu(BuildContext context) {
+    showModalBottomSheet(
+      context: context,
+      builder: (context) => SafeArea(
+        child: Wrap(
+          children: [
+            ListTile(
+              leading: const Icon(Icons.edit),
+              title: const Text('Edit'),
+              onTap: () {
+                Navigator.pop(context);
+                onTap?.call();
+              },
+            ),
+            ListTile(
+              leading: const Icon(Icons.archive, color: Colors.orange),
+              title: const Text('Archive'),
+              onTap: () {
+                Navigator.pop(context);
+                onArchive?.call();
+              },
+            ),
+            ListTile(
+              leading: const Icon(Icons.delete, color: Colors.red),
+              title: const Text('Delete'),
+              onTap: () {
+                Navigator.pop(context);
+                _confirmDelete(context);
+              },
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  void _confirmDelete(BuildContext context) {
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Delete Habit'),
+        content: Text(
+            'Permanently delete "${habitWithStreak.habit.name}"? This cannot be undone.'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text('Cancel'),
+          ),
+          TextButton(
+            onPressed: () {
+              Navigator.pop(ctx);
+              onDelete?.call();
+            },
+            style: TextButton.styleFrom(foregroundColor: Colors.red),
+            child: const Text('Delete'),
+          ),
+        ],
       ),
     );
   }

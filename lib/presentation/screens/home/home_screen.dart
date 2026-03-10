@@ -1,10 +1,15 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:google_mobile_ads/google_mobile_ads.dart';
 import '../../../core/di/injection.dart';
 import '../../providers/habits_provider.dart';
+import '../../providers/habit_logs_provider.dart';
 import 'widgets/habit_tile.dart';
 import '../settings/settings_screen.dart';
 import '../add_habit/add_habit_screen.dart';
+import '../calendar/calendar_screen.dart';
+import '../statistics/statistics_screen.dart';
 
 /// Home screen showing habit list
 class HomeScreen extends ConsumerWidget {
@@ -13,11 +18,35 @@ class HomeScreen extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final habitsState = ref.watch(habitsProvider);
+    final settingsState = ref.watch(settingsProvider);
+    final isPremium = settingsState.settings.isPremium;
 
     return Scaffold(
       appBar: AppBar(
         title: const Text('My Habits'),
         actions: [
+          IconButton(
+            icon: const Icon(Icons.bar_chart),
+            onPressed: () {
+              Navigator.push(
+                context,
+                MaterialPageRoute(
+                  builder: (context) => const StatisticsScreen(),
+                ),
+              );
+            },
+          ),
+          IconButton(
+            icon: const Icon(Icons.calendar_month),
+            onPressed: () {
+              Navigator.push(
+                context,
+                MaterialPageRoute(
+                  builder: (context) => const CalendarScreen(),
+                ),
+              );
+            },
+          ),
           IconButton(
             icon: const Icon(Icons.settings),
             onPressed: () {
@@ -31,7 +60,13 @@ class HomeScreen extends ConsumerWidget {
           ),
         ],
       ),
-      body: _buildBody(context, ref, habitsState),
+      body: Column(
+        children: [
+          Expanded(child: _buildBody(context, ref, habitsState)),
+          // Banner ad for free-tier users
+          if (!isPremium && !kIsWeb) _buildBannerAd(ref),
+        ],
+      ),
       floatingActionButton: FloatingActionButton(
         onPressed: () {
           Navigator.push(
@@ -47,6 +82,8 @@ class HomeScreen extends ConsumerWidget {
   }
 
   Widget _buildBody(BuildContext context, WidgetRef ref, HabitsState habitsState) {
+    final logsState = ref.watch(habitLogsProvider);
+
     if (habitsState.isLoading) {
       return const Center(child: CircularProgressIndicator());
     }
@@ -76,19 +113,50 @@ class HomeScreen extends ConsumerWidget {
     return Column(
       children: [
         // Today's progress card
-        _buildProgressCard(context, habitsState.habits),
+        _buildProgressCard(context, habitsState.habits, logsState),
 
         // Habit list
         Expanded(
-          child: ListView.builder(
+          child: ReorderableListView.builder(
             padding: const EdgeInsets.only(top: 8, bottom: 80),
             itemCount: habitsState.habits.length,
+            onReorder: (oldIndex, newIndex) {
+              ref.read(habitsProvider.notifier).reorderHabits(oldIndex, newIndex);
+            },
             itemBuilder: (context, index) {
               final habitWithStreak = habitsState.habits[index];
               return HabitTile(
+                key: ValueKey(habitWithStreak.habit.id),
                 habitWithStreak: habitWithStreak,
                 onTap: () {
-                  // Navigate to habit detail
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder: (context) => AddHabitScreen(habitId: habitWithStreak.habit.id),
+                    ),
+                  );
+                },
+                onArchive: () async {
+                  await ref.read(habitsProvider.notifier).archiveHabit(habitWithStreak.habit.id);
+                  if (context.mounted) {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      SnackBar(
+                        content: Text('${habitWithStreak.habit.name} archived'),
+                        behavior: SnackBarBehavior.floating,
+                      ),
+                    );
+                  }
+                },
+                onDelete: () async {
+                  await ref.read(habitsProvider.notifier).deleteHabit(habitWithStreak.habit.id);
+                  if (context.mounted) {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      SnackBar(
+                        content: Text('${habitWithStreak.habit.name} deleted'),
+                        behavior: SnackBarBehavior.floating,
+                      ),
+                    );
+                  }
                 },
                 onToggle: (isComplete) async {
                   // Show immediate feedback
@@ -154,9 +222,16 @@ class HomeScreen extends ConsumerWidget {
     );
   }
 
-  Widget _buildProgressCard(BuildContext context, List habitsWithStreak) {
+  Widget _buildProgressCard(BuildContext context, List habitsWithStreak, HabitLogsState logsState) {
     final total = habitsWithStreak.length;
-    final completed = 0; // TODO: Calculate from today's logs
+    // Count habits completed today from logs
+    final completedHabitIds = <String>{};
+    for (final entry in logsState.logsByHabit.entries) {
+      if (logsState.isCompletedToday(entry.key)) {
+        completedHabitIds.add(entry.key);
+      }
+    }
+    final completed = completedHabitIds.length;
     final rate = total > 0 ? (completed / total * 100).toInt() : 0;
 
     return Container(
@@ -205,5 +280,18 @@ class HomeScreen extends ConsumerWidget {
         ),
       ],
     );
+  }
+
+  Widget _buildBannerAd(WidgetRef ref) {
+    final adService = ref.read(adServiceProvider);
+    if (adService.isBannerLoaded && adService.bannerAd != null) {
+      return Container(
+        width: double.infinity,
+        height: adService.bannerAd!.size.height.toDouble(),
+        color: Colors.transparent,
+        child: AdWidget(ad: adService.bannerAd!),
+      );
+    }
+    return const SizedBox.shrink();
   }
 }

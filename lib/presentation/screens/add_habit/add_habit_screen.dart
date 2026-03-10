@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:uuid/uuid.dart';
 import '../../../core/di/injection.dart';
+import '../../../core/constants/app_constants.dart';
 
 /// Add/Edit Habit Screen
 class AddHabitScreen extends ConsumerStatefulWidget {
@@ -21,6 +23,34 @@ class _AddHabitScreenState extends ConsumerState<AddHabitScreen> {
   List<int> _selectedDays = [1, 2, 3, 4, 5]; // Weekdays default
 
   bool get isEditing => widget.habitId != null;
+
+  @override
+  void initState() {
+    super.initState();
+    if (isEditing) {
+      // Load existing habit data for editing
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        _loadExistingHabit();
+      });
+    }
+  }
+
+  void _loadExistingHabit() {
+    final habitsState = ref.read(habitsProvider);
+    final existingHabit = habitsState.habits
+        .where((h) => h.habit.id == widget.habitId)
+        .firstOrNull;
+
+    if (existingHabit != null) {
+      final habit = existingHabit.habit;
+      setState(() {
+        _nameController.text = habit.name;
+        _selectedIcon = habit.icon;
+        _selectedColor = habit.color;
+        _selectedDays = List<int>.from(habit.activeDays);
+      });
+    }
+  }
 
   @override
   void dispose() {
@@ -48,6 +78,7 @@ class _AddHabitScreenState extends ConsumerState<AddHabitScreen> {
             // Habit name
             TextFormField(
               controller: _nameController,
+              maxLength: AppConstants.maxHabitNameLength,
               decoration: const InputDecoration(
                 labelText: 'Habit Name',
                 hintText: 'e.g., Morning workout',
@@ -55,6 +86,9 @@ class _AddHabitScreenState extends ConsumerState<AddHabitScreen> {
               validator: (value) {
                 if (value == null || value.trim().isEmpty) {
                   return 'Please enter a habit name';
+                }
+                if (value.trim().length > AppConstants.maxHabitNameLength) {
+                  return 'Habit name must be ${AppConstants.maxHabitNameLength} characters or less';
                 }
                 return null;
               },
@@ -184,7 +218,7 @@ class _AddHabitScreenState extends ConsumerState<AddHabitScreen> {
       }
 
       // Generate unique ID for new habit
-      final habitId = widget.habitId ?? DateTime.now().millisecondsSinceEpoch.toString();
+      final habitId = widget.habitId ?? const Uuid().v4();
 
       // Show loading
       showDialog(
@@ -193,14 +227,37 @@ class _AddHabitScreenState extends ConsumerState<AddHabitScreen> {
         builder: (context) => const Center(child: CircularProgressIndicator()),
       );
 
-      // Save habit using provider
-      final success = await ref.read(habitsProvider.notifier).createHabit(
-        id: habitId,
-        name: _nameController.text.trim(),
-        icon: _selectedIcon,
-        color: _selectedColor,
-        activeDays: _selectedDays,
-      );
+      bool success;
+      if (isEditing) {
+        // Update existing habit
+        final habitsState = ref.read(habitsProvider);
+        final existingHabit = habitsState.habits
+            .where((h) => h.habit.id == widget.habitId)
+            .firstOrNull;
+
+        if (existingHabit != null) {
+          final updatedHabit = existingHabit.habit.copyWith(
+            name: _nameController.text.trim(),
+            icon: _selectedIcon,
+            color: _selectedColor,
+            activeDays: _selectedDays,
+          );
+          success = await ref.read(habitsProvider.notifier).updateHabit(updatedHabit);
+        } else {
+          success = false;
+        }
+      } else {
+        // Create new habit
+        final settingsState = ref.read(settingsProvider);
+        success = await ref.read(habitsProvider.notifier).createHabit(
+          id: habitId,
+          name: _nameController.text.trim(),
+          icon: _selectedIcon,
+          color: _selectedColor,
+          activeDays: _selectedDays,
+          isPremium: settingsState.settings.isPremium,
+        );
+      }
 
       // Close loading dialog
       if (mounted) Navigator.pop(context);
@@ -209,7 +266,7 @@ class _AddHabitScreenState extends ConsumerState<AddHabitScreen> {
         // Show success message
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text('Habit created successfully!')),
+            SnackBar(content: Text(isEditing ? 'Habit updated successfully!' : 'Habit created successfully!')),
           );
           // Go back to home screen
           Navigator.pop(context);
@@ -218,8 +275,8 @@ class _AddHabitScreenState extends ConsumerState<AddHabitScreen> {
         // Show error message
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
-              content: Text('Failed to create habit. Please try again.'),
+            SnackBar(
+              content: Text(isEditing ? 'Failed to update habit. Please try again.' : 'Failed to create habit. Please try again.'),
               backgroundColor: Colors.red,
             ),
           );

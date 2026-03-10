@@ -1,6 +1,9 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:url_launcher/url_launcher.dart';
 import '../../../core/di/injection.dart';
+import '../../../core/constants/app_constants.dart';
 
 /// Settings screen
 class SettingsScreen extends ConsumerWidget {
@@ -131,11 +134,10 @@ class SettingsScreen extends ConsumerWidget {
                     style: TextStyle(color: Colors.white, fontSize: 16),
                   ),
                   const SizedBox(height: 12),
+                  _buildPremiumFeature('🎯 Unlimited habits'),
+                  _buildPremiumFeature('🚫 Remove all ads'),
                   _buildPremiumFeature('📊 Export data to CSV/PDF'),
-                  _buildPremiumFeature('📈 Advanced analytics'),
-                  _buildPremiumFeature('☁️ Cloud backup & sync'),
-                  _buildPremiumFeature('🎨 Custom themes & icons'),
-                  _buildPremiumFeature('🚫 Remove ads'),
+                  _buildPremiumFeature('⭐ Priority support'),
                   const SizedBox(height: 16),
                   SizedBox(
                     width: double.infinity,
@@ -160,6 +162,17 @@ class SettingsScreen extends ConsumerWidget {
             ),
           ],
 
+          // Language section
+          const Divider(),
+          _buildSectionHeader(context, 'Language'),
+          _buildListTile(
+            context,
+            icon: Icons.language,
+            title: 'App Language',
+            subtitle: _getLanguageName(settings.language),
+            onTap: () => _showLanguageSelector(context, ref, settings.language),
+          ),
+
           // About section
           const Divider(),
           _buildSectionHeader(context, 'About'),
@@ -181,17 +194,13 @@ class SettingsScreen extends ConsumerWidget {
             context,
             icon: Icons.privacy_tip,
             title: 'Privacy Policy',
-            onTap: () {
-              // Open privacy policy
-            },
+            onTap: () => _openUrl(AppConstants.privacyPolicyUrl),
           ),
           _buildListTile(
             context,
             icon: Icons.description,
             title: 'Terms of Service',
-            onTap: () {
-              // Open terms
-            },
+            onTap: () => _openUrl(AppConstants.termsOfServiceUrl),
           ),
         ],
       ),
@@ -275,14 +284,14 @@ class SettingsScreen extends ConsumerWidget {
           TextButton(
             onPressed: () {
               Navigator.pop(context);
-              _exportData(context, 'csv');
+              _exportData(context, ref, 'csv');
             },
             child: const Text('CSV'),
           ),
           TextButton(
             onPressed: () {
               Navigator.pop(context);
-              _exportData(context, 'pdf');
+              _exportData(context, ref, 'pdf');
             },
             child: const Text('PDF'),
           ),
@@ -295,7 +304,7 @@ class SettingsScreen extends ConsumerWidget {
     );
   }
 
-  void _exportData(BuildContext context, String format) async {
+  void _exportData(BuildContext context, WidgetRef ref, String format) async {
     // Show loading dialog
     showDialog(
       context: context,
@@ -318,90 +327,85 @@ class SettingsScreen extends ConsumerWidget {
       ),
     );
 
-    // Simulate export process
-    await Future.delayed(const Duration(seconds: 3));
-
-    // TODO: Implement actual export functionality
-    // - Get all habits and logs from database
-    // - Generate CSV/PDF file
-    // - Save to device storage
-    // - Show share/download dialog
+    // Run real export
+    String? filePath;
+    try {
+      final exportService = ref.read(exportServiceProvider);
+      if (format == 'csv') {
+        filePath = await exportService.exportToCsv();
+      } else {
+        filePath = await exportService.exportReport();
+      }
+    } catch (e) {
+      filePath = null;
+    }
 
     if (context.mounted) {
       Navigator.pop(context); // Close loading dialog
 
-      // Show success dialog
-      showDialog(
-        context: context,
-        builder: (context) => AlertDialog(
-          title: Row(
-            children: [
-              Icon(Icons.check_circle, color: Colors.green.shade600),
-              const SizedBox(width: 8),
-              const Text('Export Complete!'),
-            ],
-          ),
-          content: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text('Your data has been exported as ${format.toUpperCase()}.'),
-              const SizedBox(height: 12),
-              Container(
-                padding: const EdgeInsets.all(12),
-                decoration: BoxDecoration(
-                  color: Colors.blue.shade50,
-                  borderRadius: BorderRadius.circular(8),
-                  border: Border.all(color: Colors.blue.shade200),
-                ),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    const Row(
-                      children: [
-                        Icon(Icons.info_outline, size: 16),
-                        SizedBox(width: 8),
-                        Text(
-                          'File Location:',
-                          style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12),
-                        ),
-                      ],
-                    ),
-                    const SizedBox(height: 4),
-                    Text(
-                      'Downloads/HabitTracker/export_${DateTime.now().millisecondsSinceEpoch}.$format',
-                      style: const TextStyle(fontSize: 11),
-                    ),
-                  ],
-                ),
-              ),
-              const SizedBox(height: 12),
-              const Text(
-                'Note: Actual file export will be implemented in the next update.',
-                style: TextStyle(fontSize: 11, fontStyle: FontStyle.italic),
-              ),
-            ],
-          ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.pop(context),
-              child: const Text('Close'),
+      if (filePath != null) {
+        showDialog(
+          context: context,
+          builder: (context) => AlertDialog(
+            title: Row(
+              children: [
+                Icon(Icons.check_circle, color: Colors.green.shade600),
+                const SizedBox(width: 8),
+                const Text('Export Complete!'),
+              ],
             ),
-            ElevatedButton(
-              onPressed: () {
-                Navigator.pop(context);
-                // TODO: Open file or share dialog
-                ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(
-                    content: Text('File sharing will be available soon'),
+            content: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text('Your data has been exported as ${format.toUpperCase()}.'),
+                const SizedBox(height: 12),
+                Container(
+                  padding: const EdgeInsets.all(12),
+                  decoration: BoxDecoration(
+                    color: Colors.blue.shade50,
+                    borderRadius: BorderRadius.circular(8),
+                    border: Border.all(color: Colors.blue.shade200),
                   ),
-                );
-              },
-              child: const Text('Share File'),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      const Row(
+                        children: [
+                          Icon(Icons.info_outline, size: 16),
+                          SizedBox(width: 8),
+                          Text(
+                            'File Location:',
+                            style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 4),
+                      Text(
+                        filePath,
+                        style: const TextStyle(fontSize: 11),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
             ),
-          ],
-        ),
-      );
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(context),
+                child: const Text('Close'),
+              ),
+            ],
+          ),
+        );
+      } else {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Export failed. Please try again.'),
+            behavior: SnackBarBehavior.floating,
+          ),
+        );
+      }
     }
   }
 
@@ -453,14 +457,13 @@ class SettingsScreen extends ConsumerWidget {
               style: TextStyle(fontWeight: FontWeight.bold),
             ),
             const SizedBox(height: 16),
+            _buildPremiumFeature('🎯 Unlimited habits'),
+            _buildPremiumFeature('🚫 Remove all ads'),
             _buildPremiumFeature('📊 Export data to CSV/PDF'),
-            _buildPremiumFeature('📈 Advanced analytics'),
-            _buildPremiumFeature('☁️ Cloud backup & sync'),
-            _buildPremiumFeature('🎨 Custom themes & icons'),
-            _buildPremiumFeature('🚫 Remove ads'),
+            _buildPremiumFeature('⭐ Priority support'),
             const SizedBox(height: 16),
             const Text(
-              'One-time payment: \$4.99',
+              'One-time payment: ₹149',
               style: TextStyle(
                 fontSize: 18,
                 fontWeight: FontWeight.bold,
@@ -517,14 +520,27 @@ class SettingsScreen extends ConsumerWidget {
     );
 
     try {
-      // Simulate purchase (reduced to 1 second for better UX)
-      await Future.delayed(const Duration(milliseconds: 800));
+      // Use real PurchaseService when available (non-web platforms)
+      if (!kIsWeb) {
+        final purchaseService = ref.read(purchaseServiceProvider);
+        if (purchaseService.isAvailable) {
+          // Wire the callback to handle purchase result
+          purchaseService.onPurchaseUpdate = (isPremium) async {
+            if (isPremium) {
+              await ref.read(settingsProvider.notifier).activatePremium();
+              // Dispose banner ad since user is now premium
+              ref.read(adServiceProvider).disposeBanner();
+            }
+          };
+          await purchaseService.purchasePremium();
+          if (context.mounted) Navigator.pop(context); // Close loading
+          return;
+        }
+      }
 
-      // Activate premium
+      // Fallback: direct activation (for web or when IAP not available)
       await ref.read(settingsProvider.notifier).activatePremium();
-
-      // Small delay to ensure state updates
-      await Future.delayed(const Duration(milliseconds: 200));
+      await Future.delayed(const Duration(milliseconds: 300));
 
       if (context.mounted) {
         Navigator.pop(context); // Close loading
@@ -550,10 +566,10 @@ class SettingsScreen extends ConsumerWidget {
                   style: TextStyle(fontWeight: FontWeight.bold),
                 ),
                 SizedBox(height: 12),
-                Text('✓ Export data unlocked'),
-                Text('✓ Advanced analytics enabled'),
-                Text('✓ Cloud backup activated'),
-                Text('✓ Custom themes available'),
+                Text('✓ Unlimited habits unlocked'),
+                Text('✓ Ads removed'),
+                Text('✓ Data export unlocked'),
+                Text('✓ Priority support enabled'),
                 SizedBox(height: 12),
                 Text(
                   'All premium features are now active!',
@@ -564,8 +580,7 @@ class SettingsScreen extends ConsumerWidget {
             actions: [
               ElevatedButton(
                 onPressed: () {
-                  Navigator.pop(context); // Close success dialog
-                  // Force rebuild of settings screen to hide premium section
+                  Navigator.pop(context);
                   if (context.mounted) {
                     ScaffoldMessenger.of(context).showSnackBar(
                       const SnackBar(
@@ -602,7 +617,6 @@ class SettingsScreen extends ConsumerWidget {
       if (context.mounted) {
         Navigator.pop(context); // Close loading
 
-        // Show error dialog
         showDialog(
           context: context,
           builder: (context) => AlertDialog(
@@ -979,5 +993,63 @@ class SettingsScreen extends ConsumerWidget {
       ),
     );
   }
-}
 
+  Future<void> _openUrl(String url) async {
+    final uri = Uri.parse(url);
+    if (await canLaunchUrl(uri)) {
+      await launchUrl(uri, mode: LaunchMode.externalApplication);
+    }
+  }
+
+  String _getLanguageName(String code) {
+    switch (code) {
+      case 'en':
+        return 'English';
+      case 'hi':
+        return 'हिंदी (Hindi)';
+      case 'es':
+        return 'Español (Spanish)';
+      case 'fr':
+        return 'Français (French)';
+      case 'de':
+        return 'Deutsch (German)';
+      case 'ja':
+        return '日本語 (Japanese)';
+      default:
+        return code;
+    }
+  }
+
+  void _showLanguageSelector(
+      BuildContext context, WidgetRef ref, String current) {
+    final languages = ['en', 'hi', 'es', 'fr', 'de', 'ja'];
+
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Select Language'),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: languages.map((code) {
+            return RadioListTile<String>(
+              title: Text(_getLanguageName(code)),
+              value: code,
+              groupValue: current,
+              onChanged: (value) {
+                if (value != null) {
+                  ref.read(settingsProvider.notifier).updateLanguage(value);
+                  Navigator.pop(context);
+                }
+              },
+            );
+          }).toList(),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('Cancel'),
+          ),
+        ],
+      ),
+    );
+  }

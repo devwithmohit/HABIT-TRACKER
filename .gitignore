@@ -74,3 +74,12 @@ app.*.map.json
 # IDE
 .vscode/launch.json
 .vscode/settings.json
+
+
+# Ignore all .md files
+*.md
+
+# But don't ignore readme.md variants
+!readme.md
+!README.md
+!Readme.md
