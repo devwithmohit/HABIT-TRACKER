@@ -25,6 +25,9 @@ class HabitModel extends HiveObject {
   @HiveField(6)
   late bool isArchived;
 
+  @HiveField(7, defaultValue: 0)
+  late int sortOrder;
+
   HabitModel({
     required this.id,
     required this.name,
@@ -33,6 +36,7 @@ class HabitModel extends HiveObject {
     required this.activeDays,
     required this.createdAt,
     this.isArchived = false,
+    this.sortOrder = 0,
   });
 
   /// Create model from map (for JSON serialization if needed)
@@ -45,6 +49,7 @@ class HabitModel extends HiveObject {
       activeDays: List<int>.from(map['activeDays'] as List),
       createdAt: DateTime.parse(map['createdAt'] as String),
       isArchived: map['isArchived'] as bool? ?? false,
+      sortOrder: map['sortOrder'] as int? ?? 0,
     );
   }
 
@@ -58,11 +63,12 @@ class HabitModel extends HiveObject {
       'activeDays': activeDays,
       'createdAt': createdAt.toIso8601String(),
       'isArchived': isArchived,
+      'sortOrder': sortOrder,
     };
   }
 
   @override
   String toString() {
-    return 'HabitModel(id: $id, name: $name, icon: $icon, color: $color, activeDays: $activeDays, createdAt: $createdAt, isArchived: $isArchived)';
+    return 'HabitModel(id: $id, name: $name, icon: $icon, color: $color, activeDays: $activeDays, createdAt: $createdAt, isArchived: $isArchived, sortOrder: $sortOrder)';
   }
 }

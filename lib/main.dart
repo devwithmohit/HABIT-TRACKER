@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:flutter_localizations/flutter_localizations.dart';
 import 'presentation/screens/home/home_screen.dart';
 import 'presentation/screens/onboarding/onboarding_screen.dart';
 import 'presentation/theme/app_theme.dart';
@@ -40,10 +41,11 @@ class MyApp extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    // Watch settings for theme
+    // Watch settings for theme and locale
     final settingsState = ref.watch(settingsProvider);
     final themeMode = settingsState.settings.themeMode;
     final isFirstLaunch = settingsState.settings.isFirstLaunch;
+    final language = settingsState.settings.language;
 
     return MaterialApp(
       title: 'Habit Tracker',
@@ -51,6 +53,20 @@ class MyApp extends ConsumerWidget {
       theme: AppTheme.light(),
       darkTheme: themeMode == 'amoled' ? AppTheme.amoled() : AppTheme.dark(),
       themeMode: _getThemeMode(themeMode),
+      locale: Locale(language),
+      supportedLocales: const [
+        Locale('en'),
+        Locale('hi'),
+        Locale('es'),
+        Locale('fr'),
+        Locale('de'),
+        Locale('ja'),
+      ],
+      localizationsDelegates: const [
+        GlobalMaterialLocalizations.delegate,
+        GlobalWidgetsLocalizations.delegate,
+        GlobalCupertinoLocalizations.delegate,
+      ],
       home: isFirstLaunch
           ? OnboardingScreen(
               onComplete: () {

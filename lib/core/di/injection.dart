@@ -108,6 +108,7 @@ final habitsProvider = StateNotifierProvider<HabitsNotifier, HabitsState>((ref) 
     ref.watch(updateHabitProvider),
     ref.watch(deleteHabitProvider),
     ref.watch(calculateStreakProvider),
+    ref.watch(reorderHabitsProvider),
   );
 });
 

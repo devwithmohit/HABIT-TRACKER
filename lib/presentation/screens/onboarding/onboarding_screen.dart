@@ -1,18 +1,23 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/foundation.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:uuid/uuid.dart';
+import '../../../core/di/injection.dart';
 
 /// Onboarding screen shown on first launch
-class OnboardingScreen extends StatefulWidget {
+class OnboardingScreen extends ConsumerStatefulWidget {
   final VoidCallback onComplete;
 
   const OnboardingScreen({super.key, required this.onComplete});
 
   @override
-  State<OnboardingScreen> createState() => _OnboardingScreenState();
+  ConsumerState<OnboardingScreen> createState() => _OnboardingScreenState();
 }
 
-class _OnboardingScreenState extends State<OnboardingScreen> {
+class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
   final PageController _pageController = PageController();
   int _currentPage = 0;
+  bool _isCompleting = false;
 
   static const _pages = [
     _OnboardingPage(
@@ -48,8 +53,39 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
         curve: Curves.easeInOut,
       );
     } else {
-      widget.onComplete();
+      _completeOnboarding();
     }
+  }
+
+  Future<void> _completeOnboarding() async {
+    if (_isCompleting) return;
+    setState(() => _isCompleting = true);
+
+    // Request notification permission
+    if (!kIsWeb) {
+      try {
+        final notificationService = ref.read(notificationServiceProvider);
+        await notificationService.requestPermissions();
+      } catch (_) {
+        // Notification permission not critical — continue
+      }
+    }
+
+    // Create a sample habit
+    try {
+      await ref.read(habitsProvider.notifier).createHabit(
+        id: const Uuid().v4(),
+        name: 'Drink Water',
+        icon: '💧',
+        color: '#4ECDC4',
+        activeDays: [1, 2, 3, 4, 5, 6, 7],
+        isPremium: false,
+      );
+    } catch (_) {
+      // Sample habit creation not critical — continue
+    }
+
+    widget.onComplete();
   }
 
   @override
@@ -68,7 +104,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
             Align(
               alignment: Alignment.topRight,
               child: TextButton(
-                onPressed: widget.onComplete,
+                onPressed: _isCompleting ? null : _completeOnboarding,
                 child: const Text('Skip'),
               ),
             ),
@@ -146,10 +182,16 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
               child: SizedBox(
                 width: double.infinity,
                 child: ElevatedButton(
-                  onPressed: _nextPage,
-                  child: Text(_currentPage == _pages.length - 1
-                      ? 'Get Started'
-                      : 'Next'),
+                  onPressed: _isCompleting ? null : _nextPage,
+                  child: _isCompleting
+                      ? const SizedBox(
+                          height: 20,
+                          width: 20,
+                          child: CircularProgressIndicator(strokeWidth: 2),
+                        )
+                      : Text(_currentPage == _pages.length - 1
+                          ? 'Get Started'
+                          : 'Next'),
                 ),
               ),
             ),

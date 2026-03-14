@@ -3,8 +3,6 @@ import '../../../domain/repositories/habit_repository.dart';
 import '../../dto/result.dart';
 
 /// Use case: Reorder habits (change display order)
-/// Note: This requires adding an 'order' field to Habit entity in the future
-/// For now, this is a placeholder that returns habits sorted by creation date
 class ReorderHabits {
   final HabitRepository _repository;
 
@@ -24,18 +22,16 @@ class ReorderHabits {
       // Create a map for quick lookup
       final habitMap = {for (var h in allHabits) h.id: h};
 
-      // Build ordered list
+      // Build ordered list and persist sort order
       final orderedHabits = <Habit>[];
-      for (final id in orderedIds) {
-        final habit = habitMap[id];
+      for (int i = 0; i < orderedIds.length; i++) {
+        final habit = habitMap[orderedIds[i]];
         if (habit != null) {
-          orderedHabits.add(habit);
+          final updated = habit.copyWith(sortOrder: i);
+          await _repository.updateHabit(updated);
+          orderedHabits.add(updated);
         }
       }
-
-      // TODO: In future, update each habit with new order index
-      // For now, just return the ordered list
-      // When implementing, add 'order' field to Habit entity
 
       return Success(orderedHabits);
     } on Exception catch (e) {

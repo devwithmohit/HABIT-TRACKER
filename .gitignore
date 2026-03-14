@@ -36,7 +36,6 @@ migrate_working_dir/
 /coverage/
 
 # Generated files
-*.g.dart
 *.freezed.dart
 *.mocks.dart
 
@@ -75,11 +74,8 @@ app.*.map.json
 .vscode/launch.json
 .vscode/settings.json
 
-
-# Ignore all .md files
-*.md
-
-# But don't ignore readme.md variants
-!readme.md
-!README.md
-!Readme.md
+# Ignore archive folder inside docs
+docs/archive/
+docs/archive/*
+**/docs/archive/
+**/docs/archive/*

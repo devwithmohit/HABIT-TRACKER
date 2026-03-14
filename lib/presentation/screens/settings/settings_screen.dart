@@ -93,6 +93,13 @@ class SettingsScreen extends ConsumerWidget {
             subtitle: 'Delete all habits and logs',
             onTap: () => _showClearDataDialog(context, ref),
           ),
+          _buildListTile(
+            context,
+            icon: Icons.settings_backup_restore,
+            title: 'Reset to Defaults',
+            subtitle: 'Restore default settings',
+            onTap: () => _showResetToDefaultsDialog(context, ref),
+          ),
 
           const Divider(),
 
@@ -161,6 +168,16 @@ class SettingsScreen extends ConsumerWidget {
               ),
             ),
           ],
+
+          // Restore purchases (non-web only)
+          if (!kIsWeb)
+            _buildListTile(
+              context,
+              icon: Icons.restore,
+              title: 'Restore Purchases',
+              subtitle: 'Recover previous purchases',
+              onTap: () => _restorePurchases(context, ref),
+            ),
 
           // Language section
           const Divider(),
@@ -382,7 +399,7 @@ class SettingsScreen extends ConsumerWidget {
                       ),
                       const SizedBox(height: 4),
                       Text(
-                        filePath,
+                        filePath!,
                         style: const TextStyle(fontSize: 11),
                       ),
                     ],
@@ -443,7 +460,22 @@ class SettingsScreen extends ConsumerWidget {
     );
   }
 
-  void _showPremiumUpgrade(BuildContext context, WidgetRef ref) {
+  void _showPremiumUpgrade(BuildContext context, WidgetRef ref) async {
+    // Try to get localized price from the store
+    String priceText = '₹${AppConstants.premiumPriceMin}';
+    if (!kIsWeb) {
+      try {
+        final purchaseService = ref.read(purchaseServiceProvider);
+        if (purchaseService.isAvailable) {
+          priceText = await purchaseService.getPremiumPrice();
+        }
+      } catch (_) {
+        // Use fallback price
+      }
+    }
+
+    if (!context.mounted) return;
+
     showDialog(
       context: context,
       builder: (context) => AlertDialog(
@@ -462,9 +494,9 @@ class SettingsScreen extends ConsumerWidget {
             _buildPremiumFeature('📊 Export data to CSV/PDF'),
             _buildPremiumFeature('⭐ Priority support'),
             const SizedBox(height: 16),
-            const Text(
-              'One-time payment: ₹149',
-              style: TextStyle(
+            Text(
+              'One-time payment: $priceText',
+              style: const TextStyle(
                 fontSize: 18,
                 fontWeight: FontWeight.bold,
                 color: Colors.amber,
@@ -1053,3 +1085,104 @@ class SettingsScreen extends ConsumerWidget {
       ),
     );
   }
+
+  void _restorePurchases(BuildContext context, WidgetRef ref) async {
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (context) => const Center(
+        child: Card(
+          child: Padding(
+            padding: EdgeInsets.all(24),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                CircularProgressIndicator(),
+                SizedBox(height: 16),
+                Text('Restoring purchases...'),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+
+    try {
+      final purchaseService = ref.read(purchaseServiceProvider);
+      purchaseService.onPurchaseUpdate = (isPremium) async {
+        if (isPremium) {
+          await ref.read(settingsProvider.notifier).activatePremium();
+          ref.read(adServiceProvider).disposeBanner();
+        }
+      };
+      await purchaseService.restorePurchases();
+
+      if (context.mounted) {
+        Navigator.pop(context);
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Purchases restored successfully'),
+            backgroundColor: Colors.green,
+          ),
+        );
+      }
+    } catch (e) {
+      if (context.mounted) {
+        Navigator.pop(context);
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Failed to restore purchases: $e'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    }
+  }
+
+  void _showResetToDefaultsDialog(BuildContext context, WidgetRef ref) {
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Row(
+          children: [
+            Icon(Icons.settings_backup_restore, color: Colors.orange),
+            SizedBox(width: 8),
+            Text('Reset to Defaults?'),
+          ],
+        ),
+        content: const Text(
+          'This will reset all settings to their default values:\n\n'
+          '• Theme will be set to System\n'
+          '• Notifications will be re-enabled\n'
+          '• Reminder time will be set to 8:00 PM\n'
+          '• Language will be set to English\n\n'
+          'Your habits and progress will NOT be affected.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('Cancel'),
+          ),
+          ElevatedButton(
+            onPressed: () async {
+              Navigator.pop(context);
+              await ref.read(settingsProvider.notifier).resetToDefaults();
+              if (context.mounted) {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(
+                    content: Text('Settings reset to defaults'),
+                    backgroundColor: Colors.green,
+                  ),
+                );
+              }
+            },
+            style: ElevatedButton.styleFrom(
+              backgroundColor: Colors.orange,
+            ),
+            child: const Text('Reset'),
+          ),
+        ],
+      ),
+    );
+  }
+}

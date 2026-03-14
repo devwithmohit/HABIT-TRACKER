@@ -17,6 +17,7 @@ class HabitMapper {
       activeDays: List<int>.from(entity.activeDays),
       createdAt: entity.createdAt,
       isArchived: entity.isArchived,
+      sortOrder: entity.sortOrder,
     );
   }
 
@@ -30,6 +31,7 @@ class HabitMapper {
       activeDays: List<int>.from(model.activeDays),
       createdAt: model.createdAt,
       isArchived: model.isArchived,
+      sortOrder: model.sortOrder,
     );
   }
 

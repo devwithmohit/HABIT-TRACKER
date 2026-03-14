@@ -4,6 +4,7 @@ import '../../application/dto/result.dart';
 import '../../application/usecases/habits/create_habit.dart';
 import '../../application/usecases/habits/delete_habit.dart';
 import '../../application/usecases/habits/get_all_habits.dart';
+import '../../application/usecases/habits/reorder_habits.dart';
 import '../../application/usecases/habits/update_habit.dart';
 import '../../application/usecases/analytics/calculate_streak.dart';
 import '../../domain/entities/habit.dart';
@@ -40,6 +41,7 @@ class HabitsNotifier extends StateNotifier<HabitsState> {
   final UpdateHabit _updateHabit;
   final DeleteHabit _deleteHabit;
   final CalculateStreak _calculateStreak;
+  final ReorderHabits _reorderHabits;
 
   HabitsNotifier(
     this._getAllHabits,
@@ -47,6 +49,7 @@ class HabitsNotifier extends StateNotifier<HabitsState> {
     this._updateHabit,
     this._deleteHabit,
     this._calculateStreak,
+    this._reorderHabits,
   ) : super(const HabitsState());
 
   /// Load all active habits with streaks
@@ -57,6 +60,8 @@ class HabitsNotifier extends StateNotifier<HabitsState> {
 
     if (result.isSuccess) {
       final habits = (result as Success<List<HabitWithStreak>>).data;
+      // Sort by sortOrder to maintain persisted order
+      habits.sort((a, b) => a.habit.sortOrder.compareTo(b.habit.sortOrder));
       state = state.copyWith(habits: habits, isLoading: false);
     } else {
       state = state.copyWith(
@@ -149,13 +154,17 @@ class HabitsNotifier extends StateNotifier<HabitsState> {
     }
   }
 
-  /// Reorder habits in the list
+  /// Reorder habits in the list and persist the new order
   void reorderHabits(int oldIndex, int newIndex) {
     if (oldIndex < newIndex) newIndex--;
     final items = List<HabitWithStreak>.from(state.habits);
     final item = items.removeAt(oldIndex);
     items.insert(newIndex, item);
     state = state.copyWith(habits: items);
+
+    // Persist the new order
+    final orderedIds = items.map((h) => h.habit.id).toList();
+    _reorderHabits(orderedIds);
   }
 
   /// Refresh habits (pull to refresh)

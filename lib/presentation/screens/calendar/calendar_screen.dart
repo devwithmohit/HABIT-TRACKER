@@ -1,10 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../core/di/injection.dart';
+import '../../../core/constants/app_constants.dart';
 import '../../../domain/entities/habit_log.dart';
 import '../../utils/date_formatter.dart';
 
-/// Calendar view screen showing habit completion history
+/// Calendar view screen showing habit completion history (last 90 days)
 class CalendarScreen extends ConsumerStatefulWidget {
   const CalendarScreen({super.key});
 
@@ -24,6 +25,14 @@ class _CalendarScreenState extends ConsumerState<CalendarScreen> {
     _focusedMonth = DateTime(DateTime.now().year, DateTime.now().month, 1);
     _selectedDate = DateTime.now();
     _loadMonthLogs();
+  }
+
+  /// The earliest month allowed based on the 90-day limit
+  DateTime get _earliestAllowedMonth {
+    final limit = DateTime.now().subtract(
+      const Duration(days: AppConstants.maxLogsToDisplay),
+    );
+    return DateTime(limit.year, limit.month, 1);
   }
 
   Future<void> _loadMonthLogs() async {
@@ -56,11 +65,15 @@ class _CalendarScreenState extends ConsumerState<CalendarScreen> {
   }
 
   void _previousMonth() {
-    setState(() {
-      _focusedMonth = DateTime(_focusedMonth.year, _focusedMonth.month - 1, 1);
-      _selectedDate = null;
-    });
-    _loadMonthLogs();
+    final prevMonth = DateTime(_focusedMonth.year, _focusedMonth.month - 1, 1);
+    // Enforce 90-day limit
+    if (!prevMonth.isBefore(_earliestAllowedMonth)) {
+      setState(() {
+        _focusedMonth = prevMonth;
+        _selectedDate = null;
+      });
+      _loadMonthLogs();
+    }
   }
 
   void _nextMonth() {
@@ -73,6 +86,11 @@ class _CalendarScreenState extends ConsumerState<CalendarScreen> {
       });
       _loadMonthLogs();
     }
+  }
+
+  bool get _canGoPrevious {
+    final prevMonth = DateTime(_focusedMonth.year, _focusedMonth.month - 1, 1);
+    return !prevMonth.isBefore(_earliestAllowedMonth);
   }
 
   int _getCompletionsForDay(DateTime day) {
@@ -95,16 +113,25 @@ class _CalendarScreenState extends ConsumerState<CalendarScreen> {
         .length;
   }
 
-  Color _getDayColor(DateTime day) {
+  double _getCompletionRate(DateTime day) {
     final completions = _getCompletionsForDay(day);
     final total = _getTotalHabitsForDay(day);
+    if (total == 0 || completions == 0) return 0.0;
+    return completions / total;
+  }
 
-    if (total == 0 || completions == 0) return Colors.transparent;
-    final rate = completions / total;
+  Color _getDayColor(DateTime day) {
+    final rate = _getCompletionRate(day);
 
+    if (rate <= 0) return Colors.transparent;
     if (rate >= 1.0) return Colors.green.shade600;
     if (rate >= 0.5) return Colors.green.shade300;
     return Colors.green.shade100;
+  }
+
+  /// Check if two dates are consecutive (for chain visualization)
+  bool _isConsecutiveCompleted(DateTime day) {
+    return _getCompletionRate(day) >= 1.0;
   }
 
   List<_DayHabitInfo> _getHabitsForSelectedDate() {
@@ -162,7 +189,7 @@ class _CalendarScreenState extends ConsumerState<CalendarScreen> {
               children: [
                 IconButton(
                   icon: const Icon(Icons.chevron_left),
-                  onPressed: _previousMonth,
+                  onPressed: _canGoPrevious ? _previousMonth : null,
                 ),
                 Text(
                   DateFormatter.formatMonthYear(_focusedMonth),
@@ -244,16 +271,58 @@ class _CalendarScreenState extends ConsumerState<CalendarScreen> {
                   date.month == _selectedDate!.month &&
                   date.day == _selectedDate!.day;
               final dayColor = _getDayColor(date);
+              final isFullyCompleted = _isConsecutiveCompleted(date);
+
+              // Chain visualization: check if previous and next days are also fully completed
+              final prevDate = date.subtract(const Duration(days: 1));
+              final nextDate = date.add(const Duration(days: 1));
+              final prevCompleted = prevDate.month == _focusedMonth.month
+                  ? _isConsecutiveCompleted(prevDate)
+                  : false;
+              final nextCompleted = nextDate.month == _focusedMonth.month &&
+                      nextDate.day <= daysInMonth
+                  ? _isConsecutiveCompleted(nextDate)
+                  : false;
+
+              // Determine chain border radius
+              BorderRadius chainRadius;
+              if (isFullyCompleted && prevCompleted && nextCompleted) {
+                // Middle of chain — flat sides
+                chainRadius = BorderRadius.circular(4);
+              } else if (isFullyCompleted && prevCompleted) {
+                // End of chain — round right
+                chainRadius = const BorderRadius.only(
+                  topLeft: Radius.circular(4),
+                  bottomLeft: Radius.circular(4),
+                  topRight: Radius.circular(8),
+                  bottomRight: Radius.circular(8),
+                );
+              } else if (isFullyCompleted && nextCompleted) {
+                // Start of chain — round left
+                chainRadius = const BorderRadius.only(
+                  topLeft: Radius.circular(8),
+                  bottomLeft: Radius.circular(8),
+                  topRight: Radius.circular(4),
+                  bottomRight: Radius.circular(4),
+                );
+              } else {
+                chainRadius = BorderRadius.circular(8);
+              }
+
+              // Reduce margin for chain connection
+              final chainMargin = isFullyCompleted && (prevCompleted || nextCompleted)
+                  ? const EdgeInsets.symmetric(horizontal: 0, vertical: 2)
+                  : const EdgeInsets.all(2);
 
               return Expanded(
                 child: GestureDetector(
                   onTap: () => setState(() => _selectedDate = date),
                   child: Container(
                     height: 44,
-                    margin: const EdgeInsets.all(2),
+                    margin: chainMargin,
                     decoration: BoxDecoration(
                       color: dayColor,
-                      borderRadius: BorderRadius.circular(8),
+                      borderRadius: chainRadius,
                       border: isSelected
                           ? Border.all(
                               color: Theme.of(context).colorScheme.primary,
